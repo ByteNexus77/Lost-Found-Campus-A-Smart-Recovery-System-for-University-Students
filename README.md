@@ -94,12 +94,9 @@ University of Frontier Technology, Bangladesh
 **Instructor:** Md. Ahsan Habib, Lecturer, Dept. of Software Engineering, BDU
 
 ---
-
 ## 📄 Proposal
 
-📎 [Download the full project proposal (PDF)]((https://github.com/ByteNexus77/Lost-Found-Campus-A-Smart-Recovery-System-for-University-Students/blob/main/proposal.pdf))
-
----
+📎 [Download the full project proposal (PDF)](https://github.com/ByteNexus77/Lost-Found-Campus-A-Smart-Recovery-System-for-University-Students/blob/main/proposal.pdf)
 
 ## 🏷️ Tags / Keywords
 
