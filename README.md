@@ -97,7 +97,7 @@ University of Frontier Technology, Bangladesh
 
 ## 📄 Proposal
 
-📎 [Download the full project proposal (PDF)]([https://github.com](https://github.com/ByteNexus77/Lost-Found-Campus-A-Smart-Recovery-System-for-University-Students/blob/main/proposal.pdf))
+📎 [Download the full project proposal (PDF)]((https://github.com/ByteNexus77/Lost-Found-Campus-A-Smart-Recovery-System-for-University-Students/blob/main/proposal.pdf))
 
 ---
 
