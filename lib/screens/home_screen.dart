@@ -6,8 +6,16 @@ import 'item_details_screen.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  String _searchQuery = "";
+  String _selectedFilter = "All"; // 'All', 'Lost', 'Found'
 
   @override
   Widget build(BuildContext context) {
@@ -19,21 +27,16 @@ class HomeScreen extends StatelessWidget {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-
           IconButton(
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ProfileScreen()),
-              );
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfileScreen()));
             },
             icon: const Icon(Icons.account_circle, size: 28),
           ),
-
           IconButton(
               onPressed: () async {
                 await FirebaseAuth.instance.signOut();
-                if (!context.mounted) return;
+                if (!mounted) return;
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -47,20 +50,52 @@ class HomeScreen extends StatelessWidget {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Text(
-                "Recent Items on Campus",
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87)
+          // ৫০% মাইলস্টোন ফিচার: সার্চ বার
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: TextField(
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value.toLowerCase().trim();
+                });
+              },
+              decoration: InputDecoration(
+                hintText: "Search items or location...",
+                prefixIcon: const Icon(Icons.search, color: Colors.blue),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide: BorderSide.none,
+                ),
+              ),
             ),
           ),
 
+          // ৫০% মাইলস্টোন ফিচার: ফিল্টার চিপস
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
+              children: [
+                _buildFilterChip("All", Colors.blue),
+                const SizedBox(width: 8),
+                _buildFilterChip("Lost", Colors.red),
+                const SizedBox(width: 8),
+                _buildFilterChip("Found", Colors.green),
+              ],
+            ),
+          ),
 
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text(
+                "Recent Items on Campus",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)
+            ),
+          ),
 
-
-
-
-
+          // ফিল্টারড লাইভ ডাটা স্ট্রিম
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -77,7 +112,7 @@ class HomeScreen extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.inventory_2_outlined, size: 100, color: Colors.grey[300]),
+                        Icon(Icons.inventory_2_outlined, size: 80, color: Colors.grey[400]),
                         const SizedBox(height: 10),
                         const Text("No items reported yet.", style: TextStyle(color: Colors.grey, fontSize: 16)),
                       ],
@@ -85,13 +120,29 @@ class HomeScreen extends StatelessWidget {
                   );
                 }
 
-                final items = snapshot.data!.docs;
+                final filteredDocs = snapshot.data!.docs.where((doc) {
+                  var data = doc.data() as Map<String, dynamic>;
+                  String title = (data['title'] ?? '').toString().toLowerCase();
+                  String location = (data['location'] ?? '').toString().toLowerCase();
+                  String status = (data['status'] ?? '').toString();
+
+                  bool matchesSearch = title.contains(_searchQuery) || location.contains(_searchQuery);
+                  bool matchesCategory = (_selectedFilter == "All") || (status.toLowerCase() == _selectedFilter.toLowerCase());
+
+                  return matchesSearch && matchesCategory;
+                }).toList();
+
+                if (filteredDocs.isEmpty) {
+                  return const Center(
+                    child: Text("No matching items found.", style: TextStyle(color: Colors.grey, fontSize: 16)),
+                  );
+                }
 
                 return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  itemCount: items.length,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  itemCount: filteredDocs.length,
                   itemBuilder: (context, index) {
-                    var itemData = items[index].data() as Map<String, dynamic>;
+                    var itemData = filteredDocs[index].data() as Map<String, dynamic>;
 
                     return Card(
                       elevation: 2,
@@ -114,13 +165,13 @@ class HomeScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const SizedBox(height: 5),
-                            Text("📍 Location: ${itemData['location']}"),
+                            Text("📍 Location: ${itemData['location']} (${itemData['zone'] ?? 'General'})"),
                             const SizedBox(height: 3),
                             Text("📝 ${itemData['description']}", maxLines: 1, overflow: TextOverflow.ellipsis),
                           ],
                         ),
                         trailing: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
                             color: itemData['status'] == 'Lost' ? Colors.red : Colors.green,
                             borderRadius: BorderRadius.circular(8),
@@ -158,6 +209,23 @@ class HomeScreen extends StatelessWidget {
         icon: const Icon(Icons.add, color: Colors.white),
         backgroundColor: Colors.blue,
       ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, Color activeColor) {
+    bool isSelected = _selectedFilter == label;
+    return ChoiceChip(
+      label: Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
+      selected: isSelected,
+      selectedColor: activeColor,
+      backgroundColor: Colors.white,
+      onSelected: (selected) {
+        if (selected) {
+          setState(() {
+            _selectedFilter = label;
+          });
+        }
+      },
     );
   }
 }
