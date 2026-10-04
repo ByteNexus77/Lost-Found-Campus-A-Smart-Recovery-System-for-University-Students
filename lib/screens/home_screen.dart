@@ -15,7 +15,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = "";
-  String _selectedFilter = "All"; // 'All', 'Lost', 'Found'
+  String _selectedStatus = "All"; // 'All', 'Lost', 'Found'
+
+  // ==========================================
+  // ক্যাম্পাসের ডিস্ট্রিবিউটেড জোন ফিল্টার স্টেট
+  // ==========================================
+  String _selectedZone = "All Zones";
+  final List<String> _zones = ['All Zones', 'Academic Zone', 'Library Zone', 'Cafeteria & Ground'];
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ৫০% মাইলস্টোন ফিচার: সার্চ বার
+          // ১. রিয়েল-টাইম সার্চ বার
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: TextField(
@@ -60,7 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 });
               },
               decoration: InputDecoration(
-                hintText: "Search items or location...",
+                hintText: "Search by item or location...",
                 prefixIcon: const Icon(Icons.search, color: Colors.blue),
                 filled: true,
                 fillColor: Colors.white,
@@ -73,29 +79,65 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // ৫০% মাইলস্টোন ফিচার: ফিল্টার চিপস
+          // ২. স্ট্যাটাস ফিল্টার চিপস (Lost / Found)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Row(
               children: [
-                _buildFilterChip("All", Colors.blue),
+                _buildStatusChip("All", Colors.blue),
                 const SizedBox(width: 8),
-                _buildFilterChip("Lost", Colors.red),
+                _buildStatusChip("Lost", Colors.red),
                 const SizedBox(width: 8),
-                _buildFilterChip("Found", Colors.green),
+                _buildStatusChip("Found", Colors.green),
               ],
+            ),
+          ),
+          const SizedBox(height: 6),
+
+          // ==========================================
+          // ৩. ক্যাম্পাস জোন ফিল্টার বাটন (Horizontal Shards)
+          // ==========================================
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
+              children: _zones.map((zone) {
+                bool isSelected = _selectedZone == zone;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6.0),
+                  child: FilterChip(
+                    label: Text(
+                        zone,
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: isSelected ? Colors.white : Colors.blueGrey,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
+                        )
+                    ),
+                    selected: isSelected,
+                    selectedColor: Colors.blueGrey[700],
+                    backgroundColor: Colors.white,
+                    checkmarkColor: Colors.white,
+                    onSelected: (selected) {
+                      setState(() {
+                        _selectedZone = zone;
+                      });
+                    },
+                  ),
+                );
+              }).toList(),
             ),
           ),
 
           const Padding(
-            padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+            padding: EdgeInsets.fromLTRB(16, 10, 16, 4),
             child: Text(
                 "Recent Items on Campus",
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)
             ),
           ),
 
-          // ফিল্টারড লাইভ ডাটা স্ট্রিম
+          // ৪. মাল্টি-লেভেল ফিল্টারড লাইভ ডাটা স্ট্রিম
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -120,16 +162,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 }
 
+                // ৩ স্তরের ফিল্টারিং: Search + Status + Zone
                 final filteredDocs = snapshot.data!.docs.where((doc) {
                   var data = doc.data() as Map<String, dynamic>;
                   String title = (data['title'] ?? '').toString().toLowerCase();
                   String location = (data['location'] ?? '').toString().toLowerCase();
                   String status = (data['status'] ?? '').toString();
+                  String zone = (data['zone'] ?? '').toString();
 
                   bool matchesSearch = title.contains(_searchQuery) || location.contains(_searchQuery);
-                  bool matchesCategory = (_selectedFilter == "All") || (status.toLowerCase() == _selectedFilter.toLowerCase());
+                  bool matchesStatus = (_selectedStatus == "All") || (status.toLowerCase() == _selectedStatus.toLowerCase());
+                  bool matchesZone = (_selectedZone == "All Zones") || (zone.toLowerCase() == _selectedZone.toLowerCase());
 
-                  return matchesSearch && matchesCategory;
+                  return matchesSearch && matchesStatus && matchesZone;
                 }).toList();
 
                 if (filteredDocs.isEmpty) {
@@ -165,7 +210,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const SizedBox(height: 5),
-                            Text("📍 Location: ${itemData['location']} (${itemData['zone'] ?? 'General'})"),
+                            Text("📍 Location: ${itemData['location']}"),
+                            // কার্ডে জোন দেখানো হচ্ছে
+                            Text("🏢 Zone: ${itemData['zone'] ?? 'General'}", style: const TextStyle(color: Colors.blueGrey, fontSize: 12, fontWeight: FontWeight.w600)),
                             const SizedBox(height: 3),
                             Text("📝 ${itemData['description']}", maxLines: 1, overflow: TextOverflow.ellipsis),
                           ],
@@ -212,8 +259,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildFilterChip(String label, Color activeColor) {
-    bool isSelected = _selectedFilter == label;
+  Widget _buildStatusChip(String label, Color activeColor) {
+    bool isSelected = _selectedStatus == label;
     return ChoiceChip(
       label: Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
       selected: isSelected,
@@ -222,7 +269,7 @@ class _HomeScreenState extends State<HomeScreen> {
       onSelected: (selected) {
         if (selected) {
           setState(() {
-            _selectedFilter = label;
+            _selectedStatus = label;
           });
         }
       },
