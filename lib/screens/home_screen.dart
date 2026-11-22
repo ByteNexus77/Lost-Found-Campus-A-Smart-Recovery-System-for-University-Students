@@ -15,16 +15,19 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = "";
-  String _selectedStatus = "All"; // 'All', 'Lost', 'Found'
-
-  // ==========================================
-  // ক্যাম্পাসের ডিস্ট্রিবিউটেড জোন ফিল্টার স্টেট
-  // ==========================================
+  String _selectedStatus = "All"; // 'All', 'Lost', 'Found', 'Resolved'
   String _selectedZone = "All Zones";
+
   final List<String> _zones = ['All Zones', 'Academic Zone', 'Library Zone', 'Cafeteria & Ground'];
 
   @override
   Widget build(BuildContext context) {
+    // ইউজারের ইমেইলের প্রথম অক্ষরটি নেওয়া (গুগল অবতারের জন্য)
+    final currentUser = FirebaseAuth.instance.currentUser;
+    String userInitial = (currentUser?.email != null && currentUser!.email!.isNotEmpty)
+        ? currentUser.email![0].toUpperCase()
+        : "U";
+
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
@@ -33,12 +36,35 @@ class _HomeScreenState extends State<HomeScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          IconButton(
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfileScreen()));
+          // ==========================================
+          // ১. GOOGLE-STYLE LETTER AVATAR IN APPBAR
+          // ==========================================
+          InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfileScreen()),
+              );
             },
-            icon: const Icon(Icons.account_circle, size: 28),
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: CircleAvatar(
+                radius: 17,
+                backgroundColor: Colors.white, // সাদা বৃত্ত
+                child: Text(
+                  userInitial, // ইমেইলের প্রথম অক্ষর
+                  style: const TextStyle(
+                    color: Colors.blue, // নীল বোল্ড অক্ষর
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ),
           ),
+
+          // লগআউট বাটন
           IconButton(
               onPressed: () async {
                 await FirebaseAuth.instance.signOut();
@@ -56,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ১. রিয়েল-টাইম সার্চ বার
+          // সার্চ বার
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: TextField(
@@ -66,7 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 });
               },
               decoration: InputDecoration(
-                hintText: "Search by item or location...",
+                hintText: "Search item, location or category...",
                 prefixIcon: const Icon(Icons.search, color: Colors.blue),
                 filled: true,
                 fillColor: Colors.white,
@@ -79,8 +105,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // ২. স্ট্যাটাস ফিল্টার চিপস (Lost / Found)
-          Padding(
+          // স্ট্যাটাস ফিল্টার চিপস
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Row(
               children: [
@@ -89,14 +116,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildStatusChip("Lost", Colors.red),
                 const SizedBox(width: 8),
                 _buildStatusChip("Found", Colors.green),
+                const SizedBox(width: 8),
+                _buildStatusChip("Resolved", Colors.blueGrey),
               ],
             ),
           ),
           const SizedBox(height: 6),
 
-          // ==========================================
-          // ৩. ক্যাম্পাস জোন ফিল্টার বাটন (Horizontal Shards)
-          // ==========================================
+          // ক্যাম্পাস জোন ফিল্টার বাটন
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -137,7 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // ৪. মাল্টি-লেভেল ফিল্টারড লাইভ ডাটা স্ট্রিম
+          // মাল্টি-লেভেল ফিল্টারড লাইভ ডাটা স্ট্রিম
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -162,15 +189,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 }
 
-                // ৩ স্তরের ফিল্টারিং: Search + Status + Zone
                 final filteredDocs = snapshot.data!.docs.where((doc) {
                   var data = doc.data() as Map<String, dynamic>;
                   String title = (data['title'] ?? '').toString().toLowerCase();
                   String location = (data['location'] ?? '').toString().toLowerCase();
+                  String category = (data['category'] ?? '').toString().toLowerCase();
                   String status = (data['status'] ?? '').toString();
                   String zone = (data['zone'] ?? '').toString();
 
-                  bool matchesSearch = title.contains(_searchQuery) || location.contains(_searchQuery);
+                  bool matchesSearch = title.contains(_searchQuery) ||
+                      location.contains(_searchQuery) ||
+                      category.contains(_searchQuery);
                   bool matchesStatus = (_selectedStatus == "All") || (status.toLowerCase() == _selectedStatus.toLowerCase());
                   bool matchesZone = (_selectedZone == "All Zones") || (zone.toLowerCase() == _selectedZone.toLowerCase());
 
@@ -187,7 +216,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   itemCount: filteredDocs.length,
                   itemBuilder: (context, index) {
-                    var itemData = filteredDocs[index].data() as Map<String, dynamic>;
+                    var rawData = filteredDocs[index].data() as Map<String, dynamic>;
+
+                    var itemData = Map<String, dynamic>.from(rawData);
+                    itemData['id'] = filteredDocs[index].id;
+
+                    bool isResolved = (itemData['status'] == 'Resolved');
+                    Color badgeColor = isResolved
+                        ? Colors.blueGrey
+                        : (itemData['status'] == 'Lost' ? Colors.red : Colors.green);
+
+                    String category = itemData['category'] ?? 'General';
 
                     return Card(
                       elevation: 2,
@@ -196,31 +235,58 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: ListTile(
                         contentPadding: const EdgeInsets.all(12),
                         leading: CircleAvatar(
-                          backgroundColor: itemData['status'] == 'Lost' ? Colors.red[100] : Colors.green[100],
+                          backgroundColor: badgeColor.withOpacity(0.15),
                           child: Icon(
-                            itemData['status'] == 'Lost' ? Icons.search : Icons.check_circle_outline,
-                            color: itemData['status'] == 'Lost' ? Colors.red : Colors.green,
+                            isResolved ? Icons.verified : _getCategoryIcon(category),
+                            color: badgeColor,
                           ),
                         ),
                         title: Text(
                           itemData['title'] ?? 'No Title',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            decoration: isResolved ? TextDecoration.lineThrough : null,
+                            color: isResolved ? Colors.grey[600] : Colors.black87,
+                          ),
                         ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const SizedBox(height: 5),
-                            Text("📍 Location: ${itemData['location']}"),
-                            // কার্ডে জোন দেখানো হচ্ছে
-                            Text("🏢 Zone: ${itemData['zone'] ?? 'General'}", style: const TextStyle(color: Colors.blueGrey, fontSize: 12, fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 3),
-                            Text("📝 ${itemData['description']}", maxLines: 1, overflow: TextOverflow.ellipsis),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    category,
+                                    style: const TextStyle(color: Colors.blue, fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    "🏢 ${itemData['zone'] ?? 'General'}",
+                                    style: const TextStyle(color: Colors.blueGrey, fontSize: 11, fontWeight: FontWeight.w600),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text("📍 Spot: ${itemData['location']}", style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+                            const SizedBox(height: 2),
+                            Text("📝 ${itemData['description']}", maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.black54)),
                           ],
                         ),
                         trailing: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
-                            color: itemData['status'] == 'Lost' ? Colors.red : Colors.green,
+                            color: badgeColor,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -274,5 +340,16 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       },
     );
+  }
+
+  IconData _getCategoryIcon(String category) {
+    switch (category) {
+      case 'ID & Cards': return Icons.badge_outlined;
+      case 'Electronics': return Icons.devices;
+      case 'Wallets & Bags': return Icons.wallet;
+      case 'Books & Notes': return Icons.menu_book;
+      case 'Keys & Personal': return Icons.key;
+      default: return Icons.category_outlined;
+    }
   }
 }
